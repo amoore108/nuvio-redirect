@@ -47,6 +47,12 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null || event.getPackageName() == null) return;
+        if (preferences == null) preferences = new AppPreferences(this);
+        if (!preferences.redirectEnabled()) {
+            awaitingEntityDetailsUntil = 0L;
+            clearCandidate();
+            return;
+        }
         String packageName = event.getPackageName().toString();
         lastEventPackage = packageName;
         if (!isHomePackage(packageName)) {

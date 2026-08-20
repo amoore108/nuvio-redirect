@@ -12,7 +12,6 @@ import android.view.View;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
@@ -25,9 +24,10 @@ import java.util.List;
 public final class MainActivity extends Activity {
     private AppPreferences preferences;
     private TextView serviceStatus;
+    private TextView redirectStatus;
     private TextView captureStatus;
     private EditText credentialInput;
-    private CheckBox redirectEnabled;
+    private Button redirectToggle;
     private Spinner nuvioVariant;
 
     @Override
@@ -51,22 +51,32 @@ public final class MainActivity extends Activity {
                 "Press OK on a Google TV recommendation to resolve its visible title through TMDB and open the matching Nuvio detail page. The utility only handles selections while the HOME launcher is active."
         ));
 
+        content.addView(TvUi.heading(this, "Redirects"));
+        redirectStatus = TvUi.status(this, "Checking redirect status…");
+        content.addView(redirectStatus);
+        redirectToggle = TvUi.button(this, "Disable redirects");
+        redirectToggle.setOnClickListener(view -> {
+            boolean enabled = !preferences.redirectEnabled();
+            preferences.setRedirectEnabled(enabled);
+            Toast.makeText(
+                    this,
+                    enabled ? "Nuvio redirects enabled" : "Nuvio redirects disabled",
+                    Toast.LENGTH_SHORT
+            ).show();
+            refreshStatus();
+        });
+        content.addView(redirectToggle);
+        content.addView(TvUi.body(
+                this,
+                "Disabling pauses all redirection while keeping the Accessibility service configured and the app installed."
+        ));
+
         content.addView(TvUi.heading(this, "1. Accessibility service"));
         serviceStatus = TvUi.status(this, "Checking service…");
         content.addView(serviceStatus);
         Button accessibilitySettings = TvUi.button(this, "Open accessibility settings");
         accessibilitySettings.setOnClickListener(view -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         content.addView(accessibilitySettings);
-
-        redirectEnabled = new CheckBox(this);
-        redirectEnabled.setText("Redirect recommendation-card selections");
-        redirectEnabled.setTextColor(getColor(R.color.text_primary));
-        redirectEnabled.setTextSize(17f);
-        redirectEnabled.setButtonTintList(getColorStateList(R.color.accent));
-        redirectEnabled.setChecked(preferences.redirectEnabled());
-        redirectEnabled.setPadding(0, TvUi.dp(this, 10), 0, TvUi.dp(this, 10));
-        redirectEnabled.setOnCheckedChangeListener((button, checked) -> preferences.setRedirectEnabled(checked));
-        content.addView(redirectEnabled);
 
         content.addView(TvUi.heading(this, "Last captured launcher card"));
         captureStatus = TvUi.status(this, "No recommendation captured yet.");
@@ -164,10 +174,15 @@ public final class MainActivity extends Activity {
                 this,
                 "Safety: selections are not consumed until a title-like recommendation is detected and both TMDB and Nuvio are configured. If a title is ambiguous, a match picker appears instead of silently choosing."
         ));
+
+        // ScrollView itself otherwise takes initial focus on some Google TV builds, causing the
+        // first Down press to skip past this primary control.
+        redirectToggle.post(redirectToggle::requestFocus);
     }
 
     private void refreshStatus() {
         if (serviceStatus == null) return;
+        boolean redirectsEnabled = preferences.redirectEnabled();
         boolean serviceEnabled = isRedirectServiceEnabled();
         boolean hasCredential = !preferences.tmdbCredential().isEmpty();
         String nuvioPackage = NuvioLauncher.selectedInstalledPackage(this, preferences);
@@ -176,6 +191,12 @@ public final class MainActivity extends Activity {
                         + "\n" + (hasCredential ? "✓ TMDB credential saved" : "✕ TMDB credential missing")
                         + "\n" + (nuvioPackage == null ? "✕ Nuvio not detected" : "✓ Nuvio package: " + nuvioPackage)
         );
+        redirectStatus.setText(
+                redirectsEnabled
+                        ? "✓ Redirects enabled\nHome-screen recommendations will open in Nuvio."
+                        : "Ⅱ Redirects disabled\nGoogle TV will handle recommendation selections normally."
+        );
+        redirectToggle.setText(redirectsEnabled ? "Disable redirects" : "Enable redirects");
         captureStatus.setText(preferences.lastCaptureSummary());
     }
 

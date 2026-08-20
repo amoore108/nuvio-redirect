@@ -16,7 +16,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class TileExtractor {
+    private static final String ENTITY_TITLE_VIEW_ID =
+            "com.google.android.apps.tv.launcherx:id/entity_details_title_row";
     private static final int MAX_NODES = 80;
+    private static final int MAX_ROOT_NODES = 500;
     private static final Pattern YEAR_PATTERN = Pattern.compile("(?:^|\\D)((?:19|20)\\d{2})(?:\\D|$)");
     private static final Pattern TRAILING_MEDIA_LABEL = Pattern.compile(
             "(?i)[,;|•·\\-–— ]+(movie|film|tv show|television show|series|episode|season(?: \\d+)?)$"
@@ -24,8 +27,11 @@ final class TileExtractor {
     private static final Pattern ACTION_PREFIX = Pattern.compile(
             "(?i)^(watch|play|open|continue watching|resume|view details for)\\s+"
     );
+    private static final Pattern COMMA_PRICING_OR_RATING_SUFFIX = Pattern.compile(
+            "(?i)\\s*,\\s*(?:(?:costs?|price|original price|fresh rating|rotten rating|rating)\\s*:|[^,]*(?:rotten tomatoes|imdb rating)).*$"
+    );
     private static final Pattern PROVIDER_SUFFIX = Pattern.compile(
-            "(?i)\\s+(?:on|from|with)\\s+(netflix|prime video|amazon prime video|disney(?:\\+| plus)|hulu|paramount(?:\\+| plus)|max|apple tv(?:\\+| plus)?|peacock|youtube)(?:\\s.*)?$"
+            "(?i)(?:\\s+(?:on|from|with)\\s+|\\s*,\\s*)(netflix|prime video|amazon prime video|disney(?:\\+| plus)|hulu|paramount(?:\\+| plus)|max|hbo max|apple tv(?:\\+| plus)?|peacock|youtube|rakuten tv|bbc iplayer|itvx|channel 4)(?:\\s.*)?$"
     );
     private static final Pattern LAUNCHER_PLACEHOLDER = Pattern.compile(
             "(?i)(?:column|row|item|card|poster|tile)\\s+\\d+"
@@ -70,6 +76,72 @@ final class TileExtractor {
             focused = findFocusedNode(root);
         }
         return extract(focused);
+    }
+
+    static boolean hasFocusedRecommendationPlaceholder(AccessibilityNodeInfo root) {
+        if (root == null) return false;
+        AccessibilityNodeInfo focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (focused == null) focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY);
+        if (focused == null) focused = findFocusedNode(root);
+        return isRecommendationPlaceholder(focused);
+    }
+
+    static TileCandidate extractEntityDetails(AccessibilityNodeInfo root) {
+        if (root == null) return null;
+        List<AccessibilityNodeInfo> titleNodes = root.findAccessibilityNodeInfosByViewId(
+                ENTITY_TITLE_VIEW_ID
+        );
+        if (titleNodes == null || titleNodes.isEmpty()) return null;
+
+        String title = cleanText(titleNodes.get(0).getText());
+        if (title.isEmpty()) title = cleanText(titleNodes.get(0).getContentDescription());
+        ParsedLabel parsedTitle = parseLabel(title, title);
+        if (parsedTitle == null) return null;
+
+        ArrayDeque<AccessibilityNodeInfo> queue = new ArrayDeque<>();
+        queue.add(root);
+        Integer year = null;
+        String mediaType = TileCandidate.TYPE_UNKNOWN;
+        StringBuilder raw = new StringBuilder(title);
+        int visited = 0;
+        while (!queue.isEmpty() && visited++ < MAX_ROOT_NODES) {
+            AccessibilityNodeInfo node = queue.removeFirst();
+            String value = cleanText(node.getContentDescription())
+                    + " " + cleanText(node.getText());
+            if (year == null) {
+                Matcher yearMatcher = YEAR_PATTERN.matcher(value);
+                if (yearMatcher.find()) {
+                    try {
+                        year = Integer.parseInt(yearMatcher.group(1));
+                    } catch (NumberFormatException ignored) {
+                        year = null;
+                    }
+                }
+            }
+            String normalized = normalize(value);
+            if (TileCandidate.TYPE_UNKNOWN.equals(mediaType)) {
+                if (normalized.matches(".*\\b(film|movie)\\b.*")) {
+                    mediaType = TileCandidate.TYPE_MOVIE;
+                } else if (normalized.matches(".*\\b(series|episode|season|tv show)\\b.*")) {
+                    mediaType = TileCandidate.TYPE_SERIES;
+                }
+            }
+            if (!value.trim().isEmpty() && raw.length() < 400) {
+                raw.append(" | ").append(value.trim());
+            }
+            for (int index = 0; index < node.getChildCount(); index++) {
+                AccessibilityNodeInfo child = node.getChild(index);
+                if (child != null) queue.addLast(child);
+            }
+        }
+        return new TileCandidate(
+                parsedTitle.title,
+                year,
+                mediaType,
+                "Google TV entity details: " + raw,
+                ENTITY_TITLE_VIEW_ID,
+                true
+        );
     }
 
     static TileCandidate extract(AccessibilityNodeInfo focused) {
@@ -197,6 +269,35 @@ final class TileExtractor {
         return null;
     }
 
+    private static boolean isRecommendationPlaceholder(AccessibilityNodeInfo focused) {
+        if (focused == null) return false;
+        String label = !TextUtils.isEmpty(focused.getText())
+                ? focused.getText().toString()
+                : focused.getContentDescription() == null
+                ? ""
+                : focused.getContentDescription().toString();
+        if (!label.isEmpty() && !LAUNCHER_PLACEHOLDER.matcher(normalize(label)).matches()) {
+            return false;
+        }
+
+        AccessibilityNodeInfo card = findCardAncestor(focused);
+        String context = normalize(collectAncestorContext(card));
+        return containsAny(context, RECOMMENDATION_CONTEXT_HINTS)
+                && !containsAny(context, NON_CONTENT_CONTEXT_HINTS);
+    }
+
+    static boolean isClearlyNonContent(TileCandidate candidate) {
+        if (candidate == null) return false;
+        String normalizedIds = candidate.viewId.toLowerCase(Locale.ROOT);
+        String normalizedRaw = normalize(candidate.rawText);
+        return containsAny(normalizedIds, NON_CONTENT_ID_HINTS)
+                || containsAny(normalizedRaw, NON_CONTENT_CONTEXT_HINTS);
+    }
+
+    private static String cleanText(CharSequence value) {
+        return value == null ? "" : value.toString().replaceAll("\\s+", " ").trim();
+    }
+
     private static void addText(Set<String> destination, CharSequence value) {
         if (value == null) return;
         String clean = value.toString().replaceAll("\\s+", " ").trim();
@@ -255,6 +356,7 @@ final class TileExtractor {
         }
 
         value = ACTION_PREFIX.matcher(value).replaceFirst("");
+        value = COMMA_PRICING_OR_RATING_SUFFIX.matcher(value).replaceFirst("");
         value = PROVIDER_SUFFIX.matcher(value).replaceFirst("");
         value = YEAR_PATTERN.matcher(value).replaceAll(" ");
         value = TRAILING_MEDIA_LABEL.matcher(value).replaceFirst("");
@@ -319,4 +421,5 @@ final class TileExtractor {
             this.score = score;
         }
     }
+
 }

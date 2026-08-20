@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -14,9 +15,11 @@ import java.util.HashSet;
 import java.util.Set;
 
 public final class RecommendationAccessibilityService extends AccessibilityService {
+    private static final String TAG = "NuvioRedirectService";
     // Keep the focused recommendation long enough to read its synopsis before pressing OK.
     // Focus changes still clear or replace this cache immediately.
     private static final long CAPTURE_MAX_AGE_MS = 30_000L;
+    private static final long ENTITY_REDIRECT_MAX_WAIT_MS = 8_000L;
     private static final Set<String> KNOWN_GOOGLE_TV_LAUNCHERS = new HashSet<>(Arrays.asList(
             "com.google.android.apps.tv.launcherx",
             "com.google.android.tvlauncher",
@@ -31,12 +34,14 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
     private int lastCandidateWindowId = -1;
     private boolean consumingSelectPress;
     private long lastMissingSetupNoticeAt;
+    private long awaitingEntityDetailsUntil;
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
         preferences = new AppPreferences(this);
         refreshHomePackage();
+        Log.i(TAG, "Accessibility service connected; home=" + homePackage);
     }
 
     @Override
@@ -45,8 +50,36 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
         String packageName = event.getPackageName().toString();
         lastEventPackage = packageName;
         if (!isHomePackage(packageName)) {
+            awaitingEntityDetailsUntil = 0L;
             clearCandidate();
             return;
+        }
+
+        // LauncherX opens its own details activity for recommendation cards whose focused
+        // accessibility node contains only a placeholder such as "Column 1". Detecting that
+        // activity is more reliable than depending solely on the select-key callback (which is
+        // not delivered for every remote/input implementation), and it is specific to Google TV
+        // content details rather than app tiles.
+        if (isGoogleTvEntityEvent(event) && awaitingEntityDetailsUntil == 0L) {
+            awaitingEntityDetailsUntil = SystemClock.uptimeMillis()
+                    + ENTITY_REDIRECT_MAX_WAIT_MS;
+            Log.i(TAG, "Detected Google TV entity activity; awaiting title");
+        }
+
+        if (awaitingEntityDetailsUntil > 0L) {
+            if (SystemClock.uptimeMillis() > awaitingEntityDetailsUntil) {
+                awaitingEntityDetailsUntil = 0L;
+            } else {
+                AccessibilityNodeInfo root = getRootInActiveWindow();
+                TileCandidate entityCandidate = TileExtractor.extractEntityDetails(root);
+                if (entityCandidate != null) {
+                    Log.i(TAG, "Captured entity details: " + entityCandidate.title);
+                    awaitingEntityDetailsUntil = 0L;
+                    preferences.saveCapture(entityCandidate, packageName);
+                    openResolverFromEntity(entityCandidate);
+                    return;
+                }
+            }
         }
 
         int type = event.getEventType();
@@ -58,6 +91,9 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
 
         AccessibilityNodeInfo source = event.getSource();
         TileCandidate candidate = TileExtractor.extract(source);
+        if (candidate == null) {
+            candidate = TileExtractor.extractFromRoot(getRootInActiveWindow());
+        }
         if (candidate == null) {
             clearCandidate();
             return;
@@ -82,6 +118,13 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
         if (!isSelectKey(event.getKeyCode())) return false;
+
+        Log.i(
+                TAG,
+                "Select key action=" + event.getAction()
+                        + " repeat=" + event.getRepeatCount()
+                        + " consuming=" + consumingSelectPress
+        );
 
         if (event.getAction() == KeyEvent.ACTION_UP && consumingSelectPress) {
             consumingSelectPress = false;
@@ -111,14 +154,33 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
                 lastCandidate,
                 recentCandidateValid
         );
+        Log.i(
+                TAG,
+                "Selection activePackage=" + activePackage
+                        + " rootCandidate=" + describeCandidate(rootCandidate)
+                        + " recentCandidate=" + describeCandidate(lastCandidate)
+                        + " recentValid=" + recentCandidateValid
+        );
 
         // Save the actual selection attempt before applying the confidence gate. This keeps an
         // uncertain launcher fingerprint available for troubleshooting.
-        if (candidate != null) preferences.saveCapture(candidate, activePackage);
-        if (candidate == null || !candidate.likelyRecommendation) return false;
+        if (candidate != null && !TileExtractor.isClearlyNonContent(candidate)) {
+            preferences.saveCapture(candidate, activePackage);
+        }
+        if (candidate == null || !candidate.likelyRecommendation) {
+            if (TileExtractor.hasFocusedRecommendationPlaceholder(root)) {
+                awaitingEntityDetailsUntil = SystemClock.uptimeMillis()
+                        + ENTITY_REDIRECT_MAX_WAIT_MS;
+                Log.i(TAG, "Armed entity-details fallback");
+            } else {
+                Log.i(TAG, "Allowed select: no recommendation candidate or placeholder");
+            }
+            return false;
+        }
 
         if (preferences.tmdbCredential().isEmpty()
                 || !NuvioLauncher.canHandleDeepLink(this, preferences)) {
+            Log.i(TAG, "Allowed select: redirect setup is incomplete");
             showMissingSetupNotice();
             return false;
         }
@@ -126,6 +188,7 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
         Intent resolver = ResolverActivity.createIntent(this, candidate)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         try {
+            Log.i(TAG, "Opening resolver directly for " + candidate.title);
             startActivity(resolver);
             consumingSelectPress = true;
             return true;
@@ -162,6 +225,26 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
         ).show();
     }
 
+    private void openResolverFromEntity(TileCandidate candidate) {
+        if (preferences.tmdbCredential().isEmpty()
+                || !NuvioLauncher.canHandleDeepLink(this, preferences)) {
+            showMissingSetupNotice();
+            return;
+        }
+        Intent resolver = ResolverActivity.createIntent(this, candidate)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        try {
+            Log.i(TAG, "Opening resolver from entity details for " + candidate.title);
+            startActivity(resolver);
+        } catch (RuntimeException failure) {
+            Toast.makeText(
+                    this,
+                    "Could not start Nuvio Redirect: " + failure.getMessage(),
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
     private void clearCandidate() {
         lastCandidate = null;
         lastCandidateAt = 0L;
@@ -173,5 +256,19 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
                 || keyCode == KeyEvent.KEYCODE_ENTER
                 || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
                 || keyCode == KeyEvent.KEYCODE_BUTTON_A;
+    }
+
+    private static boolean isGoogleTvEntityEvent(AccessibilityEvent event) {
+        if (!"com.google.android.apps.tv.launcherx".contentEquals(event.getPackageName())) {
+            return false;
+        }
+        CharSequence className = event.getClassName();
+        return className != null
+                && className.toString().endsWith(".entity.EntityActivity");
+    }
+
+    private static String describeCandidate(TileCandidate candidate) {
+        if (candidate == null) return "none";
+        return candidate.title + "/likely=" + candidate.likelyRecommendation;
     }
 }

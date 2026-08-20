@@ -68,6 +68,14 @@ public final class MainActivity extends Activity {
         redirectEnabled.setOnCheckedChangeListener((button, checked) -> preferences.setRedirectEnabled(checked));
         content.addView(redirectEnabled);
 
+        content.addView(TvUi.heading(this, "Last captured launcher card"));
+        captureStatus = TvUi.status(this, "No recommendation captured yet.");
+        captureStatus.setTextIsSelectable(true);
+        content.addView(captureStatus);
+        Button refresh = TvUi.button(this, "Refresh diagnostics");
+        refresh.setOnClickListener(view -> refreshStatus());
+        content.addView(refresh);
+
         content.addView(TvUi.heading(this, "2. TMDB credential"));
         content.addView(TvUi.body(
                 this,
@@ -150,14 +158,6 @@ public final class MainActivity extends Activity {
             startActivity(ResolverActivity.createIntent(this, candidate));
         });
         content.addView(resolve);
-
-        content.addView(TvUi.heading(this, "Last captured launcher card"));
-        captureStatus = TvUi.status(this, "No recommendation captured yet.");
-        captureStatus.setTextIsSelectable(true);
-        content.addView(captureStatus);
-        Button refresh = TvUi.button(this, "Refresh diagnostics");
-        refresh.setOnClickListener(view -> refreshStatus());
-        content.addView(refresh);
 
         content.addView(TvUi.spacer(this, 36));
         content.addView(TvUi.body(

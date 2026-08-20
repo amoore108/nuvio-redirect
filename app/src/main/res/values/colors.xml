@@ -6,4 +6,10 @@
     <color name="text_secondary">#B8BECC</color>
     <color name="accent">#8B7CFF</color>
     <color name="accent_dark">#6658D9</color>
+    <color name="status_enabled">#38D996</color>
+    <color name="status_enabled_dark">#238A63</color>
+    <color name="status_enabled_surface">#123A2D</color>
+    <color name="status_disabled">#FF6B7A</color>
+    <color name="status_disabled_dark">#B94353</color>
+    <color name="status_disabled_surface">#451E26</color>
 </resources>

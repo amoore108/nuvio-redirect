@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
@@ -25,7 +26,6 @@ public final class MainActivity extends Activity {
     private AppPreferences preferences;
     private TextView serviceStatus;
     private TextView redirectStatus;
-    private TextView captureStatus;
     private EditText credentialInput;
     private Button redirectToggle;
     private Spinner nuvioVariant;
@@ -53,6 +53,8 @@ public final class MainActivity extends Activity {
 
         content.addView(TvUi.heading(this, "Redirects"));
         redirectStatus = TvUi.status(this, "Checking redirect status…");
+        redirectStatus.setTextSize(19f);
+        redirectStatus.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         content.addView(redirectStatus);
         redirectToggle = TvUi.button(this, "Disable redirects");
         redirectToggle.setOnClickListener(view -> {
@@ -77,14 +79,6 @@ public final class MainActivity extends Activity {
         Button accessibilitySettings = TvUi.button(this, "Open accessibility settings");
         accessibilitySettings.setOnClickListener(view -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         content.addView(accessibilitySettings);
-
-        content.addView(TvUi.heading(this, "Last captured launcher card"));
-        captureStatus = TvUi.status(this, "No recommendation captured yet.");
-        captureStatus.setTextIsSelectable(true);
-        content.addView(captureStatus);
-        Button refresh = TvUi.button(this, "Refresh diagnostics");
-        refresh.setOnClickListener(view -> refreshStatus());
-        content.addView(refresh);
 
         content.addView(TvUi.heading(this, "2. TMDB credential"));
         content.addView(TvUi.body(
@@ -193,11 +187,25 @@ public final class MainActivity extends Activity {
         );
         redirectStatus.setText(
                 redirectsEnabled
-                        ? "✓ Redirects enabled\nHome-screen recommendations will open in Nuvio."
-                        : "Ⅱ Redirects disabled\nGoogle TV will handle recommendation selections normally."
+                        ? "●  REDIRECTS ON\nHome-screen recommendations will open in Nuvio."
+                        : "●  REDIRECTS OFF\nGoogle TV will handle recommendation selections normally."
+        );
+        redirectStatus.setBackgroundResource(
+                redirectsEnabled
+                        ? R.drawable.redirect_status_enabled_background
+                        : R.drawable.redirect_status_disabled_background
+        );
+        redirectStatus.setContentDescription(
+                redirectsEnabled
+                        ? "Redirects on. Home-screen recommendations will open in Nuvio."
+                        : "Redirects off. Google TV will handle recommendation selections normally."
         );
         redirectToggle.setText(redirectsEnabled ? "Disable redirects" : "Enable redirects");
-        captureStatus.setText(preferences.lastCaptureSummary());
+        redirectToggle.setBackgroundResource(
+                redirectsEnabled
+                        ? R.drawable.button_disable_background
+                        : R.drawable.button_enable_background
+        );
     }
 
     private boolean isRedirectServiceEnabled() {

@@ -11,7 +11,7 @@ Download the current APK from the [latest GitHub release](https://github.com/amo
 1. Install the APK:
 
    ```bash
-   adb install -r nuvio-redirect-0.1.0.apk
+   adb install -r nuvio-redirect.apk
    ```
 
 2. Open **Nuvio Redirect** from the TV Apps row.

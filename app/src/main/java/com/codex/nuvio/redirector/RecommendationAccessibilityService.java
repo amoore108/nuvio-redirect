@@ -14,7 +14,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 public final class RecommendationAccessibilityService extends AccessibilityService {
-    private static final long CAPTURE_MAX_AGE_MS = 4_000L;
+    // Keep the focused recommendation long enough to read its synopsis before pressing OK.
+    // Focus changes still clear or replace this cache immediately.
+    private static final long CAPTURE_MAX_AGE_MS = 30_000L;
     private static final Set<String> KNOWN_GOOGLE_TV_LAUNCHERS = new HashSet<>(Arrays.asList(
             "com.google.android.apps.tv.launcherx",
             "com.google.android.tvlauncher",
@@ -49,13 +51,20 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
 
         int type = event.getEventType();
         if (type != AccessibilityEvent.TYPE_VIEW_FOCUSED
-                && type != AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED) {
+                && type != AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED
+                && type != AccessibilityEvent.TYPE_VIEW_SELECTED) {
             return;
         }
 
         AccessibilityNodeInfo source = event.getSource();
         TileCandidate candidate = TileExtractor.extract(source);
         if (candidate == null) {
+            clearCandidate();
+            return;
+        }
+        if (!candidate.likelyRecommendation) {
+            // App and navigation tiles must clear the fallback, but should not overwrite the
+            // last useful recommendation diagnostic just because the user reopened this app.
             clearCandidate();
             return;
         }
@@ -91,17 +100,23 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
                 : lastEventPackage;
         if (!isHomePackage(activePackage)) return false;
 
-        TileCandidate candidate = TileExtractor.extractFromRoot(root);
-        if (candidate == null && lastCandidate != null
+        TileCandidate rootCandidate = TileExtractor.extractFromRoot(root);
+        boolean recentCandidateValid = lastCandidate != null
                 && root != null
                 && root.getWindowId() == lastCandidateWindowId
                 && activePackage.equals(lastEventPackage)
-                && SystemClock.uptimeMillis() - lastCandidateAt <= CAPTURE_MAX_AGE_MS) {
-            candidate = lastCandidate;
-        }
+                && SystemClock.uptimeMillis() - lastCandidateAt <= CAPTURE_MAX_AGE_MS;
+        TileCandidate candidate = CandidateSelector.choose(
+                rootCandidate,
+                lastCandidate,
+                recentCandidateValid
+        );
+
+        // Save the actual selection attempt before applying the confidence gate. This keeps an
+        // uncertain launcher fingerprint available for troubleshooting.
+        if (candidate != null) preferences.saveCapture(candidate, activePackage);
         if (candidate == null || !candidate.likelyRecommendation) return false;
 
-        preferences.saveCapture(candidate, activePackage);
         if (preferences.tmdbCredential().isEmpty()
                 || !NuvioLauncher.canHandleDeepLink(this, preferences)) {
             showMissingSetupNotice();

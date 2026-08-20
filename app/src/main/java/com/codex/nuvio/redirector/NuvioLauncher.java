@@ -45,7 +45,11 @@ final class NuvioLauncher {
                 // Nuvio's MainActivity keeps its previous detail state when Android delivers a
                 // second deep link through onNewIntent. Start a fresh task so every launcher
                 // selection replaces the previous title instead of leaving stale content visible.
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                .addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                                | Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                | Intent.FLAG_ACTIVITY_NO_ANIMATION
+                );
         context.startActivity(intent);
     }
 

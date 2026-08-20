@@ -76,8 +76,11 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
             if (SystemClock.uptimeMillis() > awaitingEntityDetailsUntil) {
                 awaitingEntityDetailsUntil = 0L;
             } else {
-                AccessibilityNodeInfo root = getRootInActiveWindow();
-                TileCandidate entityCandidate = TileExtractor.extractEntityDetails(root);
+                TileCandidate entityCandidate = TileExtractor.extractEntityDetails(event.getSource());
+                if (entityCandidate == null) {
+                    AccessibilityNodeInfo root = getRootInActiveWindow();
+                    entityCandidate = TileExtractor.extractEntityDetails(root);
+                }
                 if (entityCandidate != null) {
                     Log.i(TAG, "Captured entity details: " + entityCandidate.title);
                     awaitingEntityDetailsUntil = 0L;
@@ -192,7 +195,11 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
         }
 
         Intent resolver = ResolverActivity.createIntent(this, candidate)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                .addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                | Intent.FLAG_ACTIVITY_NO_ANIMATION
+                );
         try {
             Log.i(TAG, "Opening resolver directly for " + candidate.title);
             startActivity(resolver);
@@ -238,7 +245,11 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
             return;
         }
         Intent resolver = ResolverActivity.createIntent(this, candidate)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                .addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                | Intent.FLAG_ACTIVITY_NO_ANIMATION
+                );
         try {
             Log.i(TAG, "Opening resolver from entity details for " + candidate.title);
             startActivity(resolver);

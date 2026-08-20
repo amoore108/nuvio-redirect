@@ -194,10 +194,10 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
             return false;
         }
 
-        Intent resolver = ResolverActivity.createIntent(this, candidate)
+        Intent resolver = HeadlessResolverActivity.createIntent(this, candidate)
                 .addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK
-                                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                | Intent.FLAG_ACTIVITY_CLEAR_TASK
                                 | Intent.FLAG_ACTIVITY_NO_ANIMATION
                 );
         try {
@@ -244,10 +244,10 @@ public final class RecommendationAccessibilityService extends AccessibilityServi
             showMissingSetupNotice();
             return;
         }
-        Intent resolver = ResolverActivity.createIntent(this, candidate)
+        Intent resolver = HeadlessResolverActivity.createIntent(this, candidate)
                 .addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK
-                                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                | Intent.FLAG_ACTIVITY_CLEAR_TASK
                                 | Intent.FLAG_ACTIVITY_NO_ANIMATION
                 );
         try {

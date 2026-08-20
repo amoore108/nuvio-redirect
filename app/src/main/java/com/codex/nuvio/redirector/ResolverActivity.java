@@ -13,17 +13,20 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @SuppressLint("SetTextI18n")
 public final class ResolverActivity extends Activity {
-    private static final String EXTRA_TITLE = "title";
-    private static final String EXTRA_YEAR = "year";
-    private static final String EXTRA_TYPE = "type";
-    private static final String EXTRA_RAW = "raw";
+    static final String EXTRA_TITLE = "title";
+    static final String EXTRA_YEAR = "year";
+    static final String EXTRA_TYPE = "type";
+    static final String EXTRA_RAW = "raw";
+    static final String EXTRA_MATCHES = "matches";
+    static final String EXTRA_ERROR = "error";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private AppPreferences preferences;
@@ -104,6 +107,16 @@ public final class ResolverActivity extends Activity {
                 "resolver",
                 true
         );
+        String error = intent.getStringExtra(EXTRA_ERROR);
+        if (error != null) {
+            showError(error);
+            return;
+        }
+        List<TmdbClient.Match> precomputedMatches = matchesFromIntent(intent);
+        if (precomputedMatches != null) {
+            showMatches(candidate, precomputedMatches);
+            return;
+        }
         executor.execute(() -> {
             try {
                 List<TmdbClient.Match> matches = new TmdbClient().search(preferences.tmdbCredential(), candidate);
@@ -151,6 +164,19 @@ public final class ResolverActivity extends Activity {
         } catch (ActivityNotFoundException | SecurityException failure) {
             showError(failure.getMessage() == null ? "Nuvio could not handle the deep link." : failure.getMessage());
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static List<TmdbClient.Match> matchesFromIntent(Intent intent) {
+        Serializable value = intent.getSerializableExtra(EXTRA_MATCHES);
+        if (!(value instanceof ArrayList<?>)) return null;
+        ArrayList<?> matches = (ArrayList<?>) value;
+        for (Object match : matches) {
+            if (!(match instanceof TmdbClient.Match)) return null;
+        }
+        List<TmdbClient.Match> result = new ArrayList<>();
+        for (Object match : matches) result.add((TmdbClient.Match) match);
+        return result;
     }
 
     private void showError(String message) {

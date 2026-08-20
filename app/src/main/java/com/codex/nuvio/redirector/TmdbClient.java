@@ -10,6 +10,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Serializable;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -239,7 +240,8 @@ final class TmdbClient {
         return previous[right.length()];
     }
 
-    static final class Match {
+    static final class Match implements Serializable {
+        private static final long serialVersionUID = 1L;
         final int id;
         final String title;
         final String originalTitle;

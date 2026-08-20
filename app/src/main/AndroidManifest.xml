@@ -37,6 +37,12 @@
             android:theme="@style/Theme.NuvioRedirector.Resolver" />
 
         <activity
+            android:name=".HeadlessResolverActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/Theme.NuvioRedirector.HeadlessResolver" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>

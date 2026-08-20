@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Nuvio Redirect</string>
+    <string name="accessibility_service_name">Nuvio recommendation redirect</string>
+    <string name="accessibility_description">Reads the title of a focused Google TV recommendation when you press OK, resolves it through TMDB, and opens the matching title in Nuvio. It only redirects while the home launcher is active.</string>
+</resources>

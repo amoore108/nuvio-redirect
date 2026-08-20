@@ -42,7 +42,10 @@ final class NuvioLauncher {
         Uri deepLink = Uri.parse("nuvio://tmdb/" + type + "/" + match.id);
         Intent intent = new Intent(Intent.ACTION_VIEW, deepLink)
                 .setPackage(packageName)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                // Nuvio's MainActivity keeps its previous detail state when Android delivers a
+                // second deep link through onNewIntent. Start a fresh task so every launcher
+                // selection replaces the previous title instead of leaving stale content visible.
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         context.startActivity(intent);
     }
 

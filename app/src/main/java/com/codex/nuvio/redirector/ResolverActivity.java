@@ -5,7 +5,9 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -42,7 +44,7 @@ public final class ResolverActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         preferences = new AppPreferences(this);
-        buildUi();
+        showLoadingSurface();
         handleIntent(getIntent());
     }
 
@@ -50,6 +52,7 @@ public final class ResolverActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        showLoadingSurface();
         handleIntent(intent);
     }
 
@@ -61,6 +64,7 @@ public final class ResolverActivity extends Activity {
     }
 
     private void buildUi() {
+        if (status != null) return;
         LinearLayout content = TvUi.scrollableColumn(this);
         content.addView(TvUi.title(this, "Opening in Nuvio"));
         status = TvUi.status(this, "Reading recommendation…");
@@ -73,9 +77,17 @@ public final class ResolverActivity extends Activity {
         ));
     }
 
+    private void showLoadingSurface() {
+        status = null;
+        matchContainer = null;
+        View transparentSurface = new View(this);
+        transparentSurface.setBackgroundColor(Color.TRANSPARENT);
+        setContentView(transparentSurface);
+    }
+
     private void handleIntent(Intent intent) {
         int requestGeneration = ++generation;
-        matchContainer.removeAllViews();
+        showLoadingSurface();
         String title = intent.getStringExtra(EXTRA_TITLE);
         String type = intent.getStringExtra(EXTRA_TYPE);
         String raw = intent.getStringExtra(EXTRA_RAW);
@@ -92,10 +104,6 @@ public final class ResolverActivity extends Activity {
                 "resolver",
                 true
         );
-        status.setText("Resolving “" + candidate.title + "”"
-                + (candidate.year == null ? "" : " (" + candidate.year + ")")
-                + " through TMDB…");
-
         executor.execute(() -> {
             try {
                 List<TmdbClient.Match> matches = new TmdbClient().search(preferences.tmdbCredential(), candidate);
@@ -122,6 +130,7 @@ public final class ResolverActivity extends Activity {
             return;
         }
 
+        buildUi();
         status.setText("Choose the match for “" + candidate.title + "”. Nothing was selected automatically because the result was ambiguous.");
         for (TmdbClient.Match match : matches) {
             Button choice = TvUi.button(this, match.displayLabel());
@@ -133,7 +142,9 @@ public final class ResolverActivity extends Activity {
     }
 
     private void openMatch(TmdbClient.Match match) {
-        status.setText("Opening " + match.displayLabel() + " in Nuvio…");
+        if (status != null) {
+            status.setText("Opening " + match.displayLabel() + " in Nuvio…");
+        }
         try {
             NuvioLauncher.open(this, match, preferences);
             finish();
@@ -143,6 +154,7 @@ public final class ResolverActivity extends Activity {
     }
 
     private void showError(String message) {
+        buildUi();
         matchContainer.removeAllViews();
         status.setText("Could not redirect\n" + message);
         addCancelButton();

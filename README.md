@@ -17,9 +17,8 @@ Download the current APK from the [latest GitHub release](https://github.com/amo
 2. Open **Nuvio Redirect** from the TV Apps row.
 3. Add either a TMDB v3 API key or a TMDB v4 Read Access Token.
 4. Choose the installed Nuvio variant, or leave **Auto-detect** selected.
-5. Use **Test Nuvio deep link** to confirm that Nuvio opens a detail page.
-6. Select **Open accessibility settings**, find **Nuvio recommendation redirect**, and enable it.
-7. Return to the Google TV home screen, focus a movie or series recommendation, and press OK.
+5. Select **Open accessibility settings**, find **Nuvio recommendation redirect**, and enable it.
+6. Return to the Google TV home screen, focus a movie or series recommendation, and press OK.
 
 The first lookup can take a moment. Exact title/year matches open automatically. Ambiguous matches display a picker.
 

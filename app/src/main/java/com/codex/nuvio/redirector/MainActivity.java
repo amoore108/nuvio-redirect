@@ -3,7 +3,6 @@ package com.codex.nuvio.redirector;
 import android.annotation.SuppressLint;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -114,55 +113,6 @@ public final class MainActivity extends Activity {
             refreshStatus();
         });
         content.addView(saveVariant);
-        Button testNuvio = TvUi.button(this, "Test Nuvio deep link (Fight Club)");
-        testNuvio.setOnClickListener(view -> {
-            try {
-                NuvioLauncher.openTest(this, preferences);
-            } catch (ActivityNotFoundException failure) {
-                Toast.makeText(this, failure.getMessage(), Toast.LENGTH_LONG).show();
-            }
-        });
-        content.addView(testNuvio);
-
-        content.addView(TvUi.heading(this, "Manual resolver test"));
-        EditText manualTitle = TvUi.edit(this, "Movie or series title");
-        content.addView(manualTitle);
-        EditText manualYear = TvUi.edit(this, "Year (optional)");
-        manualYear.setInputType(InputType.TYPE_CLASS_NUMBER);
-        content.addView(manualYear);
-        Spinner manualType = new Spinner(this);
-        String[] types = {"Unknown type", "Movie", "Series"};
-        ArrayAdapter<String> typeAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, types);
-        typeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        manualType.setAdapter(typeAdapter);
-        manualType.setFocusable(true);
-        content.addView(manualType);
-        Button resolve = TvUi.button(this, "Resolve and open in Nuvio");
-        resolve.setOnClickListener(view -> {
-            String title = manualTitle.getText().toString().trim();
-            if (title.isEmpty()) {
-                Toast.makeText(this, "Enter a title first", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            Integer year = null;
-            try {
-                if (!manualYear.getText().toString().trim().isEmpty()) {
-                    year = Integer.parseInt(manualYear.getText().toString().trim());
-                }
-            } catch (NumberFormatException ignored) {
-                Toast.makeText(this, "Enter a four-digit year", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            String type = manualType.getSelectedItemPosition() == 1
-                    ? TileCandidate.TYPE_MOVIE
-                    : manualType.getSelectedItemPosition() == 2
-                    ? TileCandidate.TYPE_SERIES
-                    : TileCandidate.TYPE_UNKNOWN;
-            TileCandidate candidate = new TileCandidate(title, year, type, title, "manual", true);
-            startActivity(ResolverActivity.createIntent(this, candidate));
-        });
-        content.addView(resolve);
-
         content.addView(TvUi.spacer(this, 36));
         content.addView(TvUi.body(
                 this,

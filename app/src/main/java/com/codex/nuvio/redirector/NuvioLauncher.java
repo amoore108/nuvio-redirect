@@ -53,18 +53,6 @@ final class NuvioLauncher {
         context.startActivity(intent);
     }
 
-    static void openTest(Context context, AppPreferences preferences) throws ActivityNotFoundException {
-        open(context, new TmdbClient.Match(
-                550,
-                "Fight Club",
-                "Fight Club",
-                TileCandidate.TYPE_MOVIE,
-                1999,
-                1.0,
-                1.0
-        ), preferences);
-    }
-
     private static boolean isInstalled(Context context, String packageName) {
         try {
             context.getPackageManager().getApplicationInfo(packageName, 0);
